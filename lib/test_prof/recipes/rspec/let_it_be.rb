@@ -3,6 +3,8 @@
 require "test_prof"
 require_relative "./before_all"
 
+require 'pry-byebug'
+
 module TestProf
   # Just like `let`, but persist the result for the whole group.
   # NOTE: Experimental and magical, for more control use `before_all`.
@@ -50,19 +52,24 @@ module TestProf
     end
 
     def define_let_it_be_methods(identifier, reload: false, refind: false)
-      let_accessor = -> { instance_variable_get(:"#{PREFIX}#{identifier}") }
+      let_accessor = lambda do |instance = nil|
+        id = :"#{PREFIX}#{identifier}"
+        instance.nil? ? instance_variable_get(id) : instance.instance_variable_get(id)
+      end
 
       if reload
-        let_accessor = lambda do
-          record = instance_variable_get(:"#{PREFIX}#{identifier}")
+        let_accessor = lambda do |instance = nil|
+          id = :"#{PREFIX}#{identifier}"
+          record = instance.nil? ? instance_variable_get(id) : instance.instance_variable_get(id)
           next unless record.is_a?(::ActiveRecord::Base)
           record.reload
         end
       end
 
       if refind
-        let_accessor = lambda do
-          record = instance_variable_get(:"#{PREFIX}#{identifier}")
+        let_accessor = lambda do |instance = nil|
+          id = :"#{PREFIX}#{identifier}"
+          record = instance.nil? ? instance_variable_get(id) : instance.instance_variable_get(id)
           next unless record.is_a?(::ActiveRecord::Base)
 
           record.class.find(record.send(record.class.primary_key))
@@ -73,7 +80,7 @@ module TestProf
         define_method(identifier) do
           # Trying to detect the context (couldn't find other way so far)
           if @__inspect_output =~ /\(:context\)/
-            instance_variable_get(:"#{PREFIX}#{identifier}")
+            let_accessor.call(self)
           else
             # Fallback to let definition
             super()
